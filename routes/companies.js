@@ -36,9 +36,14 @@ router.post('/', async function (req, res, next) {
 
   try {
     const { code, name, description } = req.body;
-    const result = await db.query(`INSERT INTO companies (code, name, description) VALUES ($1, $2, $3) RETURNING code, name, description`, [code, name, description]);
+    if (!code || !name || !description) {
+      throw new ExpressError("Incomplete input(s).", 404);
+    }
+    else {
+      const result = await db.query(`INSERT INTO companies (code, name, description) VALUES ($1, $2, $3) RETURNING code, name, description`, [code, name, description]);
 
-    return res.status(201).json({ "company": result.rows[0] });
+      return res.status(201).json({ "company": result.rows[0] });
+    }
   }
   catch (err) {
     return next(err);
@@ -46,13 +51,21 @@ router.post('/', async function (req, res, next) {
 })
 
 router.put('/:code', async function (req, res, next) {
-  const { name, description } = req.body;
-  const result = await db.query(`UPDATE companies SET name = $1, description = $2 WHERE code = $3 RETURNING code, name, description`, [name, description, req.params.code])
 
   try {
+
+    const { name, description } = req.body;
+    // if name or description not provided 
+    if (!name || !description) {
+      throw new ExpressError("Incomplete input(s).", 404);
+    }
+
+    const result = await db.query(`UPDATE companies SET name = $1, description = $2 WHERE code = $3 RETURNING code, name, description`, [name, description, req.params.code])
+
     if (result.rows[0]) {
       return res.json({ "company": result.rows[0] });
     }
+    // if code not in DB 
     else {
       throw new ExpressError("Company cannot be found.", 404);
     }
@@ -65,9 +78,8 @@ router.put('/:code', async function (req, res, next) {
 router.delete('/:code', async function (req, res, next) {
   const findCompany = await db.query(`SELECT name FROM companies WHERE code = $1`, [req.params.code]);
 
-
   try {
-    if (findCompany.rows[0]) {
+    if (findCompany.rows.length !== 0) {
       const result = await db.query(`DELETE from companies WHERE code = $1`, [req.params.code]);
       return res.json({ status: "deleted" });
     }
@@ -79,5 +91,6 @@ router.delete('/:code', async function (req, res, next) {
     return next(err);
   }
 })
+
 
 module.exports = router;
