@@ -16,12 +16,26 @@ router.get('/', async function (req, res, next) {
 })
 
 router.get('/:code', async function (req, res, next) {
-  const result = await db.query(`SELECT code, name, description FROM companies WHERE code = $1`, [req.params.code]);
-
+  const result = await db.query(
+    `SELECT code, name, description 
+    FROM companies WHERE code = $1`, 
+    [req.params.code]
+    );
   // is 2 error msgs what we expect?
   try {
     if (result.rows[0]) {
-      return res.json({ "company": result.rows[0] });
+      const result = await db.query(
+        `SELECT c.code, c.name, c.description, i.id
+          FROM companies AS c
+          JOIN invoices i ON c.code = i.comp_code
+          WHERE code = $1`,
+         [req.params.code]
+      );
+      const { code, name, description } = result.rows[0];
+      const company = {code, name, description};
+      let invoiceIds = result.rows.map(r => r.id);
+
+      return res.json({ "company":{ ...company, invoiceIds } });
     }
     else {
       throw new ExpressError("Company given is not found.", 404);
@@ -37,10 +51,14 @@ router.post('/', async function (req, res, next) {
   try {
     const { code, name, description } = req.body;
     if (!code || !name || !description) {
-      throw new ExpressError("Incomplete input(s).", 404);
+      throw new ExpressError("Incomplete input(s).", 400);
     }
     else {
-      const result = await db.query(`INSERT INTO companies (code, name, description) VALUES ($1, $2, $3) RETURNING code, name, description`, [code, name, description]);
+      const result = await db.query(
+        `INSERT INTO companies (code, name, description) 
+          VALUES ($1, $2, $3) 
+          RETURNING code, name, description`, 
+          [code, name, description]);
 
       return res.status(201).json({ "company": result.rows[0] });
     }
@@ -57,10 +75,14 @@ router.put('/:code', async function (req, res, next) {
     const { name, description } = req.body;
     // if name or description not provided 
     if (!name || !description) {
-      throw new ExpressError("Incomplete input(s).", 404);
+      throw new ExpressError("Incomplete input(s).", 400);
     }
 
-    const result = await db.query(`UPDATE companies SET name = $1, description = $2 WHERE code = $3 RETURNING code, name, description`, [name, description, req.params.code])
+    const result = await db.query(
+      `UPDATE companies 
+        SET name = $1, description = $2 
+        WHERE code = $3 RETURNING code, name, description`, 
+        [name, description, req.params.code]);
 
     if (result.rows[0]) {
       return res.json({ "company": result.rows[0] });
@@ -76,11 +98,20 @@ router.put('/:code', async function (req, res, next) {
 })
 
 router.delete('/:code', async function (req, res, next) {
-  const findCompany = await db.query(`SELECT name FROM companies WHERE code = $1`, [req.params.code]);
+  const findCompany = await db.query(
+    `SELECT name 
+      FROM companies
+      WHERE code = $1`, 
+      [req.params.code]
+  );
 
   try {
     if (findCompany.rows.length !== 0) {
-      const result = await db.query(`DELETE from companies WHERE code = $1`, [req.params.code]);
+      await db.query(
+        `DELETE from companies 
+         WHERE code = $1`, 
+        [req.params.code]
+      );
       return res.json({ status: "deleted" });
     }
     else {
